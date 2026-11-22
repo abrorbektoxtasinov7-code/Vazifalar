@@ -89,7 +89,7 @@ h2.sec.late{color:var(--red)}
 .tag.p3{color:var(--red);border-color:rgba(255,107,122,.35);background:rgba(255,107,122,.08)}
 .tag.p2{color:var(--amber);border-color:rgba(245,184,74,.35);background:rgba(245,184,74,.08)}
 .tag.p1{color:#9fb6e8}
-.dright{flex:none;min-width:84px;max-width:104px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;padding:10px 14px 10px 6px;text-align:right}
+.dright{flex:none;min-width:84px;max-width:118px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;padding:10px 14px 10px 6px;text-align:right}
 .dright .lbl{font-size:10.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
 .dright .val{font-size:13.5px;font-weight:600;margin-top:2px;color:#c9d4ec}
 .dright .val.late{color:var(--red)} .dright .val.today{color:var(--accent)} .dright .val.none{color:var(--dim);font-weight:400}
@@ -99,6 +99,14 @@ h2.sec.late{color:var(--red)}
 .dright .tm.late{color:var(--red)}
 .task.done .dright .tm{color:var(--muted)}
 .timebox{position:relative}
+.grip{flex:none;width:30px;display:flex;align-items:center;justify-content:center;color:var(--dim);touch-action:none;cursor:grab;border-left:1px solid var(--line);-webkit-user-select:none;user-select:none}
+.grip svg{width:16px;height:16px}
+.task:has(.grip) .dright{padding-right:8px}
+.task.dragging{z-index:5;border-color:var(--accent);box-shadow:0 16px 36px rgba(0,0,0,.65),0 0 0 1px var(--accent);cursor:grabbing}
+.task.dragging .grip{color:var(--accent)}
+body.dragmode{-webkit-user-select:none;user-select:none;overscroll-behavior:none}
+.dright .nx{font-size:11.5px;white-space:nowrap;color:var(--muted);margin-top:3px}
+.dright .nx.today{color:var(--accent)}
 .clr{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:0;background:var(--surface2);color:var(--muted);width:26px;height:26px;border-radius:50%;padding:0;font-size:13px}
 .empty{text-align:center;color:var(--muted);padding:56px 16px}
 .empty .ic{width:64px;height:64px;border-radius:20px;margin:0 auto 14px;background:var(--accent-soft);display:grid;place-items:center;color:var(--accent)}
@@ -185,7 +193,7 @@ h2.sec.late{color:var(--red)}
     <h3 id="editTitle">Yangi vazifa</h3>
     <div class="field"><label for="fTitle">Vazifa</label><input type="text" id="fTitle" maxlength="300" placeholder="Nima qilish kerak?" enterkeyhint="done"></div>
     <div class="field" style="display:flex;gap:10px">
-      <div style="flex:1.4;min-width:0"><label for="fDue" class="flabel">Muddat</label><input type="date" id="fDue"></div>
+      <div style="flex:1.4;min-width:0" id="dueBox"><label for="fDue" class="flabel">Muddat</label><input type="date" id="fDue"></div>
       <div style="flex:1;min-width:0"><label for="fTime" class="flabel">Vaqt</label><div class="timebox"><input type="time" id="fTime"><button type="button" class="clr" id="fTimeClr" aria-label="Vaqtni olib tashlash" hidden>✕</button></div></div>
     </div>
     <div class="hint" id="timeHint" hidden style="margin:-8px 0 14px"></div>
@@ -328,7 +336,7 @@ const WD_ORDER = [1,2,3,4,5,6,0];
 function parseD(s){ const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
 function repMatch(rep, days, wd, d){
   if(rep === 'daily') return true;
-  if(rep === 'weekly') return d.getDay() === wd;
+  if(rep === 'weekly') return (days && days.length) ? days.includes(d.getDay()) : d.getDay() === wd;
   if(rep === 'days') return (days || []).includes(d.getDay());
   return false;
 }
@@ -348,9 +356,21 @@ function nextDue(t){
   if(s < today()) s = firstFrom(t.rep, t.repDays, wd, today());
   return s;
 }
+const repWd = t => (t.repDays && t.repDays.length) ? t.repDays[0] : parseD(t.due || today()).getDay();
+/* repeating tasks have no deadline: keep their next occurrence on today or later */
+function rollRepeats(){
+  let ch = false; const td = today();
+  for(const t of data.tasks){
+    if(t.deleted || t.done || !t.rep) continue;
+    if(!t.due || t.due < td){
+      t.due = firstFrom(t.rep, t.repDays, repWd(t), td); t.updatedAt = now(); ch = true;
+    }
+  }
+  return ch;
+}
 function repText(t){
   if(t.rep === 'daily') return 'Har kuni';
-  if(t.rep === 'weekly') return 'Har ' + DAYS[parseD(t.due || today()).getDay()].toLowerCase();
+  if(t.rep === 'weekly') return 'Har ' + DAYS[repWd(t)].toLowerCase();
   if(t.rep === 'days'){
     const ds = WD_ORDER.filter(w => (t.repDays || []).includes(w));
     return ds.length === 7 ? 'Har kuni' : ds.map(w => WD_SHORT[w]).join(', ');
@@ -396,20 +416,44 @@ const PRIO = { 1:'Oddiy', 2:"O'rta", 3:'Muhim' };
 const BELL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>';
 function hhmm(d){ return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); }
 
+const GRIP_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.7"/><circle cx="15" cy="6" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="18" r="1.7"/><circle cx="15" cy="18" r="1.7"/></svg>';
+const byOrder = fb => (a,b) => {
+  const oa = a.order ?? Infinity, ob = b.order ?? Infinity;
+  return oa !== ob ? (oa < ob ? -1 : 1) : fb(a,b);
+};
+function sortRep(a,b){
+  if((a.time||'') !== (b.time||'')){ if(!a.time) return 1; if(!b.time) return -1; return a.time < b.time ? -1 : 1; }
+  if((b.prio||1) !== (a.prio||1)) return (b.prio||1) - (a.prio||1);
+  return a.createdAt - b.createdAt;
+}
+function group(title, arr, cls = ''){
+  return arr.length ? `<h2 class="sec ${cls}">${title}</h2><div class="grp">${arr.map(taskHTML).join('')}</div>` : '';
+}
+
 function taskHTML(t){
   const c = new Date(t.createdAt || now());
   const dl = dueLabel(t.due);
   const p = t.prio || 1;
+  const grip = t.done ? '' : `<div class="grip" aria-label="Surish">${GRIP_SVG}</div>`;
+  const timeHTML = t.time ? `<span class="tm${!t.done && !t.rep && t.due && (t.due < today() || (t.due === today() && t.time < hhmm(new Date()))) ? ' late' : ''}">${BELL_SVG}${esc(t.time)}</span>` : '';
+  let right;
+  if(t.rep && !t.done){
+    const isToday = t.due <= today();
+    right = `<span class="lbl">Takror</span><span class="val">${esc(repText(t))}</span>${timeHTML}` +
+      `<span class="nx${isToday ? ' today' : ''}">${isToday ? 'Bugun' : 'Keyingisi: ' + (t.due === addDays(1) ? 'ertaga' : parseD(t.due).getDate() + '-' + MON3[parseD(t.due).getMonth()])}</span>`;
+  } else {
+    right = `<span class="lbl">Muddat</span><span class="val ${dl.cls}">${esc(dl.text)}</span>${timeHTML}`;
+  }
   return `<div class="task p${p}${t.done?' done':''}" data-id="${esc(t.id)}">
     <div class="dleft" title="Qo'shilgan sana"><span class="dd">${c.getDate()}</span><span class="mm">${MON3[c.getMonth()]}</span></div>
     <div class="mid">
       <button class="check" data-act="toggle" aria-label="Bajarildi">${CHECK_SVG}</button>
       <div class="tx">
         <div class="title">${esc(t.title)}</div>
-        <div class="tags">${t.rep ? `<span class="tag rep">↻ ${esc(repText(t))}</span>` : ''}${t.list ? `<span class="tag">${esc(listName(t.list))}</span>` : ''}<span class="tag p${p}">${PRIO[p]}</span></div>
+        <div class="tags">${t.list ? `<span class="tag">${esc(listName(t.list))}</span>` : ''}<span class="tag p${p}">${PRIO[p]}</span></div>
       </div>
     </div>
-    <div class="dright"><span class="lbl">Muddat</span><span class="val ${dl.cls}">${esc(dl.text)}</span>${t.time ? `<span class="tm${!t.done && t.due && (t.due < today() || (t.due === today() && t.time < hhmm(new Date()))) ? ' late' : ''}">${BELL_SVG}${esc(t.time)}</span>` : ''}</div>
+    <div class="dright">${right}</div>${grip}
   </div>`;
 }
 
@@ -446,21 +490,13 @@ function render(){
       html += taskHTML(t);
     });
   } else if(view === 'upcoming'){
-    const dated = items.filter(t => t.due).sort(sortActive);
-    const nodue = items.filter(t => !t.due).sort(sortActive);
-    if(dated.length) html += `<h2 class="sec">Kelgusi</h2>` + dated.map(taskHTML).join('');
-    if(nodue.length) html += `<h2 class="sec">Muddatsiz</h2>` + nodue.map(taskHTML).join('');
+    html += group('Kelgusi', items.filter(t => t.due).sort(byOrder(sortActive)));
+    html += group('Muddatsiz', items.filter(t => !t.due).sort(byOrder(sortActive)));
   } else if(view === 'today'){
-    const late = items.filter(t => t.due < td).sort(sortActive);
-    const tod = items.filter(t => t.due === td).sort(sortActive);
-    if(late.length) html += `<h2 class="sec late">Muddati o'tgan</h2>` + late.map(taskHTML).join('');
-    if(tod.length) html += `<h2 class="sec">Bugun</h2>` + tod.map(taskHTML).join('');
+    html += group('Muddati o\'tgan', items.filter(t => t.due < td).sort(byOrder(sortActive)), 'late');
+    html += group('Bugun', items.filter(t => t.due === td).sort(byOrder(sortActive)));
   } else {
-    items.sort(sortActive);
-    const late = items.filter(t => t.due && t.due < td);
-    const rest = items.filter(t => !(t.due && t.due < td));
-    if(late.length) html += `<h2 class="sec late">Muddati o'tgan</h2>` + late.map(taskHTML).join('');
-    if(rest.length) html += `<h2 class="sec">Takrorlanadigan vazifalar</h2>` + rest.map(taskHTML).join('');
+    html += group('Takrorlanadigan vazifalar', items.sort(byOrder(sortRep)));
   }
   if(!items.length){
     const msg = {
@@ -486,6 +522,7 @@ $('taskArea').addEventListener('click', e => {
     d.forEach(t => { t.deleted = true; touch(t); });
     changed(); return;
   }
+  if(e.target.closest('.grip')) return;
   const row = e.target.closest('.task'); if(!row) return;
   const t = data.tasks.find(x => x.id === row.dataset.id); if(!t) return;
   if(e.target.closest('[data-act="toggle"]')){
@@ -509,22 +546,87 @@ $('taskArea').addEventListener('click', e => {
   } else openSheet(t);
 });
 
+/* ===== drag to reorder (hold the ⋮⋮ handle on the right) ===== */
+let drag = null;
+function layoutDrag(){
+  const { card, grp } = drag;
+  card.style.transform = '';
+  for(let guard = 0; guard < 50; guard++){
+    const nat = card.getBoundingClientRect();
+    const center = drag.y - drag.offY + nat.height / 2;
+    const prev = card.previousElementSibling, next = card.nextElementSibling;
+    if(prev){ const r = prev.getBoundingClientRect(); if(center < r.top + r.height / 2){ grp.insertBefore(card, prev); drag.moved = true; continue; } }
+    if(next){ const r = next.getBoundingClientRect(); if(center > r.top + r.height / 2){ grp.insertBefore(next, card); drag.moved = true; continue; } }
+    break;
+  }
+  const nat = card.getBoundingClientRect(), gr = grp.getBoundingClientRect();
+  let dy = drag.y - drag.offY - nat.top;
+  dy = Math.max(gr.top - nat.top, Math.min(gr.bottom - nat.bottom, dy));
+  card.style.transform = `translateY(${dy}px)`;
+}
+function dragScroll(){
+  if(!drag) return;
+  const edge = 90, H = window.innerHeight;
+  let v = 0;
+  if(drag.y < edge) v = -Math.ceil((edge - drag.y) / 6);
+  else if(drag.y > H - edge - 20) v = Math.ceil((drag.y - (H - edge - 20)) / 6);
+  if(v){ window.scrollBy(0, v); layoutDrag(); }
+  requestAnimationFrame(dragScroll);
+}
+$('taskArea').addEventListener('pointerdown', e => {
+  const g = e.target.closest('.grip'); if(!g || drag) return;
+  const card = g.closest('.task'), grp = card.parentElement;
+  if(!grp.classList.contains('grp')) return;
+  e.preventDefault();
+  try{ g.setPointerCapture(e.pointerId); }catch(x){}
+  const r = card.getBoundingClientRect();
+  drag = { card, grp, pid: e.pointerId, offY: e.clientY - r.top, y: e.clientY, moved: false };
+  card.classList.add('dragging'); document.body.classList.add('dragmode');
+  try{ navigator.vibrate && navigator.vibrate(12); }catch(x){}
+  requestAnimationFrame(dragScroll);
+});
+$('taskArea').addEventListener('pointermove', e => {
+  if(!drag || e.pointerId !== drag.pid) return;
+  e.preventDefault(); drag.y = e.clientY; layoutDrag();
+});
+function endDrag(e){
+  if(!drag || e.pointerId !== drag.pid) return;
+  const { card, grp, moved } = drag;
+  drag = null;
+  card.style.transform = ''; card.classList.remove('dragging'); document.body.classList.remove('dragmode');
+  if(!moved) return;
+  [...grp.children].forEach((c, i) => {
+    const t = data.tasks.find(x => x.id === c.dataset.id);
+    if(t && t.order !== i + 1){ t.order = i + 1; touch(t); }
+  });
+  changed();
+}
+$('taskArea').addEventListener('pointerup', endDrag);
+$('taskArea').addEventListener('pointercancel', endDrag);
+$('taskArea').addEventListener('touchmove', e => { if(drag) e.preventDefault(); }, { passive: false });
+
 /* task sheet */
 let editing = null, fPrio = 1, fList = 'shaxsiy', fRep = '', fDays = [];
 function updRepHint(){
   const h = $('repHint');
-  const due = $('fDue').value || today();
   let txt = '';
-  if(fRep === 'daily') txt = 'Har kuni takrorlanadi. Bajarganingizda keyingi kunga o\'tadi.';
-  else if(fRep === 'weekly') txt = 'Har hafta ' + DAYS[parseD(due).getDay()].toLowerCase() + ' kuni takrorlanadi (muddatdagi kun bo\'yicha).';
-  else if(fRep === 'days') txt = fDays.length ? 'Har hafta: ' + WD_ORDER.filter(w => fDays.includes(w)).map(w => DAYS[w]).join(', ') + '.' : 'Takrorlanadigan kunlarni tanlang.';
+  const tip = ' Muddat qo\'yilmaydi, xohlasangiz vaqt belgilang.';
+  if(fRep === 'daily') txt = 'Har kuni takrorlanadi.' + tip;
+  else if(fRep === 'weekly') txt = fDays.length ? 'Har hafta ' + DAYS[fDays[0]].toLowerCase() + ' kuni takrorlanadi.' + tip : 'Haftaning bitta kunini tanlang.';
+  else if(fRep === 'days') txt = fDays.length ? 'Har hafta: ' + WD_ORDER.filter(w => fDays.includes(w)).map(w => DAYS[w]).join(', ') + '.' + tip : 'Takrorlanadigan kunlarni tanlang.';
   h.textContent = txt; h.hidden = !txt;
 }
 function setRep(r){
   fRep = r;
   [...$('fRep').children].forEach(b => b.classList.toggle('on', b.dataset.r === r));
-  $('fDays').hidden = r !== 'days';
-  if(r && !$('fDue').value) $('fDue').value = today();
+  $('fDays').hidden = !(r === 'days' || r === 'weekly');
+  $('dueBox').hidden = !!r;
+  if(!r && !$('fDue').value) $('fDue').value = today();
+  if(r === 'weekly' && fDays.length !== 1){
+    const wd = editing && editing.rep === 'weekly' ? repWd(editing) : (fDays[0] ?? new Date().getDay());
+    fDays = [wd];
+    [...$('fDays').children].forEach(b => b.classList.toggle('on', fDays.includes(+b.dataset.w)));
+  }
   updRepHint();
 }
 function setDays(ds){
@@ -536,7 +638,8 @@ $('fRep').addEventListener('click', e => { const b = e.target.closest('[data-r]'
 $('fDays').addEventListener('click', e => {
   const b = e.target.closest('[data-w]'); if(!b) return;
   const w = +b.dataset.w;
-  setDays(fDays.includes(w) ? fDays.filter(x => x !== w) : fDays.concat(w));
+  if(fRep === 'weekly') setDays([w]);
+  else setDays(fDays.includes(w) ? fDays.filter(x => x !== w) : fDays.concat(w));
 });
 $('fDue').addEventListener('change', updRepHint);
 function updTimeHint(){
@@ -582,11 +685,14 @@ $('saveBtn').onclick = () => {
   const vals = { title, due: $('fDue').value, time: $('fTime').value || '', list: fList, prio: fPrio };
   if(vals.time && !vals.due) vals.due = today();
   if(!(editing && editing.done)){
-    vals.rep = fRep; vals.repDays = fRep === 'days' ? fDays.slice() : [];
+    vals.rep = fRep;
+    vals.repDays = (fRep === 'days' || fRep === 'weekly') ? fDays.slice() : [];
     if(fRep){
-      if(fRep === 'days' && !fDays.length){ toast('Takrorlanadigan kunlarni tanlang'); return; }
-      if(!vals.due) vals.due = today();
-      if(fRep === 'days') vals.due = firstFrom('days', fDays, 0, vals.due);
+      if(!vals.repDays.length && fRep !== 'daily'){ toast(fRep === 'weekly' ? 'Haftaning kunini tanlang' : 'Takrorlanadigan kunlarni tanlang'); return; }
+      // no deadline for repeating tasks: keep the next occurrence internally (for completion and reminders)
+      const key = x => JSON.stringify((x || []).slice().sort());
+      const same = editing && editing.rep === fRep && key(editing.repDays) === key(vals.repDays) && editing.due && editing.due >= today();
+      vals.due = same ? editing.due : firstFrom(fRep, vals.repDays, new Date().getDay(), today());
     }
   }
   let saved;
@@ -666,7 +772,7 @@ const TZ = (() => { try{ return Intl.DateTimeFormat().resolvedOptions().timeZone
 const RR_DAY = ['SU','MO','TU','WE','TH','FR','SA'];
 function calWant(t){
   if(t.deleted || t.done || !t.time || !t.due) return null;
-  return { title: t.title, due: t.due, time: t.time, rep: t.rep || '', repDays: t.rep === 'days' ? (t.repDays || []).slice().sort() : [] };
+  return { title: t.title, due: t.due, time: t.time, rep: t.rep || '', repDays: (t.rep === 'days' || t.rep === 'weekly') ? (t.repDays || []).slice().sort() : [] };
 }
 function calBody(t, w){
   const [y,m,d] = w.due.split('-').map(Number), [hh,mm] = w.time.split(':').map(Number);
@@ -680,7 +786,7 @@ function calBody(t, w){
     extendedProperties: { private: { vazifaId: t.id } }
   };
   if(w.rep === 'daily') body.recurrence = ['RRULE:FREQ=DAILY'];
-  else if(w.rep === 'weekly') body.recurrence = ['RRULE:FREQ=WEEKLY;BYDAY=' + RR_DAY[parseD(w.due).getDay()]];
+  else if(w.rep === 'weekly') body.recurrence = ['RRULE:FREQ=WEEKLY;BYDAY=' + RR_DAY[w.repDays.length ? w.repDays[0] : parseD(w.due).getDay()]];
   else if(w.rep === 'days' && w.repDays.length) body.recurrence = ['RRULE:FREQ=WEEKLY;BYDAY=' + w.repDays.map(x => RR_DAY[x]).join(',')];
   return body;
 }
@@ -813,7 +919,7 @@ async function doSync(){
     }
     const before = JSON.stringify(data);
     if(remote && Array.isArray(remote.tasks)){ data = merge(data, remote); migrate(); }
-    purgeDone();
+    purgeDone(); rollRepeats();
     await syncCalendar();
     const body = JSON.stringify({ app:'Vazifalar', version:2, savedAt:new Date().toISOString(), tasks:data.tasks, lists:data.lists });
     const norm = x => JSON.stringify(merge(x, {tasks:[],lists:[]}));
@@ -918,7 +1024,7 @@ $('gDisconnect').onclick = () => {
 
 document.addEventListener('visibilitychange', () => {
   if(document.visibilityState !== 'visible') return;
-  if(purgeDone()){ saveLocal(); sync.dirty = true; saveSync(); }
+  if(purgeDone() | rollRepeats()){ saveLocal(); sync.dirty = true; saveSync(); }
   render(); if(tokenValid()) doSync();
 });
 window.addEventListener('online', () => { if(tokenValid()) doSync(); });
@@ -934,7 +1040,7 @@ window.addEventListener('appinstalled', () => { $('installBtn').hidden = true; t
 if('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 
 /* ================= Start ================= */
-if(purgeDone()){ saveLocal(); sync.dirty = true; saveSync(); }
+if(purgeDone() | rollRepeats()){ saveLocal(); sync.dirty = true; saveSync(); }
 render();
 if(sync.connected){
   loadGis().catch(() => {});
