@@ -94,6 +94,12 @@ h2.sec.late{color:var(--red)}
 .dright .val{font-size:13.5px;font-weight:600;margin-top:2px;color:#c9d4ec}
 .dright .val.late{color:var(--red)} .dright .val.today{color:var(--accent)} .dright .val.none{color:var(--dim);font-weight:400}
 .task.done .dright .val{color:var(--muted)}
+.dright .tm{display:inline-flex;align-items:center;gap:4px;margin-top:4px;font-size:12.5px;color:#b9c9f5;font-variant-numeric:tabular-nums}
+.dright .tm svg{width:12px;height:12px}
+.dright .tm.late{color:var(--red)}
+.task.done .dright .tm{color:var(--muted)}
+.timebox{position:relative}
+.clr{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:0;background:var(--surface2);color:var(--muted);width:26px;height:26px;border-radius:50%;padding:0;font-size:13px}
 .empty{text-align:center;color:var(--muted);padding:56px 16px}
 .empty .ic{width:64px;height:64px;border-radius:20px;margin:0 auto 14px;background:var(--accent-soft);display:grid;place-items:center;color:var(--accent)}
 .empty b{display:block;color:var(--text);font-size:17px;margin-bottom:4px}
@@ -114,9 +120,10 @@ h2.sec.late{color:var(--red)}
 .sheet h3{margin:0 0 16px;font-size:19px}
 .field{margin-bottom:16px}
 .field>label,.flabel{display:block;font-size:12.5px;color:var(--muted);margin-bottom:7px;font-weight:500;letter-spacing:.02em}
-.field input[type=text],.field input[type=date]{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:13px 14px;outline:none;font-size:16px}
+.field input[type=text],.field input[type=date],.field input[type=time]{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:13px 14px;outline:none;font-size:16px}
 .field input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
-.field input[type=date]{min-height:50px}
+.field input[type=date],.field input[type=time]{min-height:50px}
+.field input[type=time]::-webkit-calendar-picker-indicator{filter:invert(.7) sepia(1) hue-rotate(190deg) saturate(4);cursor:pointer;opacity:.9}
 .field input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.7) sepia(1) hue-rotate(190deg) saturate(4);cursor:pointer;opacity:.9}
 .seg{display:flex;gap:8px}
 .seg button{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--line);background:var(--bg);border-radius:12px;padding:11px 6px;font-size:14.5px;color:var(--muted)}
@@ -177,7 +184,11 @@ h2.sec.late{color:var(--red)}
     <div class="grab"></div>
     <h3 id="editTitle">Yangi vazifa</h3>
     <div class="field"><label for="fTitle">Vazifa</label><input type="text" id="fTitle" maxlength="300" placeholder="Nima qilish kerak?" enterkeyhint="done"></div>
-    <div class="field"><label for="fDue">Muddat</label><input type="date" id="fDue"></div>
+    <div class="field" style="display:flex;gap:10px">
+      <div style="flex:1.4;min-width:0"><label for="fDue" class="flabel">Muddat</label><input type="date" id="fDue"></div>
+      <div style="flex:1;min-width:0"><label for="fTime" class="flabel">Vaqt</label><div class="timebox"><input type="time" id="fTime"><button type="button" class="clr" id="fTimeClr" aria-label="Vaqtni olib tashlash" hidden>✕</button></div></div>
+    </div>
+    <div class="hint" id="timeHint" hidden style="margin:-8px 0 14px"></div>
     <div class="field"><span class="flabel">Takrorlash</span>
       <div class="seg rep" id="fRep">
         <button type="button" data-r="">Yo'q</button>
@@ -224,6 +235,11 @@ h2.sec.late{color:var(--red)}
         <button class="btn ghost" id="gSyncNow" hidden>Hozir sinxronlash</button>
         <button class="btn danger" id="gDisconnect" hidden>Uzish</button>
       </div>
+    </div>
+    <div class="card">
+      <h4>🔔 Eslatmalar (Google Calendar)</h4>
+      <p id="calStatus"></p>
+      <button class="btn" id="calEnable" hidden>Eslatmalarni yoqish</button>
     </div>
     <div class="card">
       <h4>Zaxira nusxa</h4>
@@ -370,12 +386,15 @@ function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&l
 function inView(t, v){ return sectionOf(t) === v; }
 function sortActive(a,b){
   if(a.due !== b.due){ if(!a.due) return 1; if(!b.due) return -1; return a.due < b.due ? -1 : 1; }
+  if((a.time||'') !== (b.time||'')){ if(!a.time) return 1; if(!b.time) return -1; return a.time < b.time ? -1 : 1; }
   if((b.prio||1) !== (a.prio||1)) return (b.prio||1) - (a.prio||1);
   return a.createdAt - b.createdAt;
 }
 
 const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="#04140d" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 const PRIO = { 1:'Oddiy', 2:"O'rta", 3:'Muhim' };
+const BELL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>';
+function hhmm(d){ return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); }
 
 function taskHTML(t){
   const c = new Date(t.createdAt || now());
@@ -390,7 +409,7 @@ function taskHTML(t){
         <div class="tags">${t.rep ? `<span class="tag rep">↻ ${esc(repText(t))}</span>` : ''}${t.list ? `<span class="tag">${esc(listName(t.list))}</span>` : ''}<span class="tag p${p}">${PRIO[p]}</span></div>
       </div>
     </div>
-    <div class="dright"><span class="lbl">Muddat</span><span class="val ${dl.cls}">${esc(dl.text)}</span></div>
+    <div class="dright"><span class="lbl">Muddat</span><span class="val ${dl.cls}">${esc(dl.text)}</span>${t.time ? `<span class="tm${!t.done && t.due && (t.due < today() || (t.due === today() && t.time < hhmm(new Date()))) ? ' late' : ''}">${BELL_SVG}${esc(t.time)}</span>` : ''}</div>
   </div>`;
 }
 
@@ -472,7 +491,7 @@ $('taskArea').addEventListener('click', e => {
   if(e.target.closest('[data-act="toggle"]')){
     if(!t.done && t.rep){
       // keep a record in "Bajarilgan", move the repeating task to its next date
-      data.tasks.push({ id: uid(), title: t.title, list: t.list, prio: t.prio, due: t.due || today(),
+      data.tasks.push({ id: uid(), title: t.title, list: t.list, prio: t.prio, due: t.due || today(), time: t.time || '',
         done: true, doneAt: now(), createdAt: now(), updatedAt: now(), fromRec: t.id });
       t.due = nextDue(t); touch(t);
       toast('Bajarildi ✓  Keyingisi: ' + dueLabel(t.due).text);
@@ -520,6 +539,18 @@ $('fDays').addEventListener('click', e => {
   setDays(fDays.includes(w) ? fDays.filter(x => x !== w) : fDays.concat(w));
 });
 $('fDue').addEventListener('change', updRepHint);
+function updTimeHint(){
+  const v = $('fTime').value, h = $('timeHint');
+  $('fTimeClr').hidden = !v;
+  if(!v){ h.hidden = true; return; }
+  h.hidden = false;
+  h.textContent = sync.connected
+    ? '🔔 Soat ' + v + ' dan 5 daqiqa oldin telefoningizga eslatma keladi (Google Calendar orqali).'
+    : '🔔 Eslatma kelishi uchun Sozlamalarda Google hisobingizni ulang.';
+}
+$('fTime').addEventListener('input', updTimeHint);
+$('fTime').addEventListener('change', updTimeHint);
+$('fTimeClr').onclick = () => { $('fTime').value = ''; updTimeHint(); };
 function setPrio(p){ fPrio = p; [...$('fPrio').children].forEach(b => b.classList.toggle('on', +b.dataset.p === p)); }
 function setList(l){ fList = l; [...$('fList').children].forEach(b => b.classList.toggle('on', b.dataset.l === l)); }
 function openSheet(t){
@@ -529,6 +560,8 @@ function openSheet(t){
   $('delBtn').hidden = !t;
   $('fTitle').value = t ? t.title : '';
   $('fDue').value = t ? (t.due || '') : today();
+  $('fTime').value = t ? (t.time || '') : '';
+  updTimeHint();
   setList(t ? (t.list || 'shaxsiy') : (listFilter || 'shaxsiy'));
   setPrio(t ? (t.prio || 1) : 1);
   setDays(t && t.repDays ? t.repDays : []);
@@ -546,7 +579,8 @@ $('cancelBtn').onclick = closeSheet;
 $('saveBtn').onclick = () => {
   const title = $('fTitle').value.trim();
   if(!title){ $('fTitle').focus(); toast('Vazifa nomini yozing'); return; }
-  const vals = { title, due: $('fDue').value, list: fList, prio: fPrio };
+  const vals = { title, due: $('fDue').value, time: $('fTime').value || '', list: fList, prio: fPrio };
+  if(vals.time && !vals.due) vals.due = today();
   if(!(editing && editing.done)){
     vals.rep = fRep; vals.repDays = fRep === 'days' ? fDays.slice() : [];
     if(fRep){
@@ -620,9 +654,77 @@ function merge(a, b){
 window.__vzMerge = merge;
 
 /* ================= Google Drive sync ================= */
-const SCOPE = 'https://www.googleapis.com/auth/drive.file';
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+const CAL_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
+const SCOPE = DRIVE_SCOPE + ' ' + CAL_SCOPE;
 const FILE_NAME = 'Vazifalar (sinxron).json';
-let tokenClient = null, gisLoading = null, syncing = false, syncAgain = false, syncTimer = null, syncError = '';
+let tokenClient = null, gisLoading = null, syncing = false, syncAgain = false, syncTimer = null, syncError = '', calError = '';
+const hasTimed = () => tasks().some(t => t.time && !t.done);
+
+/* ================= Google Calendar reminders ================= */
+const TZ = (() => { try{ return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Tashkent'; }catch(e){ return 'Asia/Tashkent'; } })();
+const RR_DAY = ['SU','MO','TU','WE','TH','FR','SA'];
+function calWant(t){
+  if(t.deleted || t.done || !t.time || !t.due) return null;
+  return { title: t.title, due: t.due, time: t.time, rep: t.rep || '', repDays: t.rep === 'days' ? (t.repDays || []).slice().sort() : [] };
+}
+function calBody(t, w){
+  const [y,m,d] = w.due.split('-').map(Number), [hh,mm] = w.time.split(':').map(Number);
+  const end = new Date(y, m-1, d, hh, mm + 15);
+  const body = {
+    summary: w.title,
+    description: 'Vazifalar ilovasi · ' + listName(t.list) + ' · ' + PRIO[t.prio || 1],
+    start: { dateTime: `${w.due}T${w.time}:00`, timeZone: TZ },
+    end: { dateTime: `${ymd(end)}T${hhmm(end)}:00`, timeZone: TZ },
+    reminders: { useDefault: false, overrides: [{ method: 'popup', minutes: 5 }] },
+    extendedProperties: { private: { vazifaId: t.id } }
+  };
+  if(w.rep === 'daily') body.recurrence = ['RRULE:FREQ=DAILY'];
+  else if(w.rep === 'weekly') body.recurrence = ['RRULE:FREQ=WEEKLY;BYDAY=' + RR_DAY[parseD(w.due).getDay()]];
+  else if(w.rep === 'days' && w.repDays.length) body.recurrence = ['RRULE:FREQ=WEEKLY;BYDAY=' + w.repDays.map(x => RR_DAY[x]).join(',')];
+  return body;
+}
+/* make Google Calendar match the tasks: create / update / delete one event per timed task */
+async function syncCalendar(){
+  if(!sync.cal) return false;
+  const base = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
+  let changedAny = false; calError = '';
+  for(const t of data.tasks){
+    const w = calWant(t);
+    const sig = w ? JSON.stringify(w) : '';
+    if((t.calSig || '') === sig && (!!t.calEventId === !!w)) continue;
+    try{
+      if(!w){
+        if(t.calEventId){
+          try{ await api(`${base}/${encodeURIComponent(t.calEventId)}`, { method:'DELETE' }); }
+          catch(e){ if(e.status !== 404 && e.status !== 410) throw e; }
+        }
+        t.calEventId = ''; t.calSig = '';
+      } else {
+        const body = JSON.stringify(calBody(t, w));
+        let done = false;
+        if(t.calEventId){
+          try{
+            await api(`${base}/${encodeURIComponent(t.calEventId)}`, { method:'PUT', headers:{ 'Content-Type':'application/json' }, body });
+            done = true;
+          }catch(e){ if(e.status !== 404 && e.status !== 410) throw e; }
+        }
+        if(!done){
+          const r = await api(base, { method:'POST', headers:{ 'Content-Type':'application/json' }, body });
+          t.calEventId = (await r.json()).id;
+        }
+        t.calSig = sig;
+      }
+      t.updatedAt = now(); changedAny = true;
+    }catch(e){
+      if(e.auth) throw e;
+      calError = e.status === 403 ? 'Google Calendar API yoqilmagan yoki ruxsat yo\'q' : 'Eslatmani Calendar\'ga yozib bo\'lmadi';
+      console.warn('calendar', e);
+      break;
+    }
+  }
+  return changedAny;
+}
 
 const tokenValid = () => sync.token && sync.exp > now() + 60000;
 
@@ -646,8 +748,14 @@ async function requestToken(firstTime){
       callback: resp => {
         if(resp.error){ syncError = 'Ulanish rad etildi'; renderSyncUI(); return; }
         sync.token = resp.access_token; sync.exp = now() + (resp.expires_in||3600)*1000;
+        const wasCal = sync.cal;
+        try{ sync.cal = google.accounts.oauth2.hasGrantedAllScopes(resp, CAL_SCOPE); }
+        catch(e){ sync.cal = String(resp.scope || '').includes(CAL_SCOPE); }
+        const first = !sync.connected;
         sync.connected = true; syncError = ''; saveSync();
-        toast('Google Drive ulandi'); doSync();
+        if(first) toast(sync.cal ? 'Google ulandi: Drive va eslatmalar' : 'Google Drive ulandi');
+        else if(sync.cal && !wasCal) toast('Eslatmalar yoqildi 🔔');
+        doSync();
       },
       error_callback: err => { syncError = err && err.type === 'popup_closed' ? '' : 'Ulanishda xato'; renderSyncUI(); }
     });
@@ -692,6 +800,7 @@ async function doSync(){
     const before = JSON.stringify(data);
     if(remote && Array.isArray(remote.tasks)){ data = merge(data, remote); migrate(); }
     purgeDone();
+    await syncCalendar();
     const body = JSON.stringify({ app:'Vazifalar', version:2, savedAt:new Date().toISOString(), tasks:data.tasks, lists:data.lists });
     const norm = x => JSON.stringify(merge(x, {tasks:[],lists:[]}));
     const remoteSame = remote && norm(remote) === norm(data);
@@ -737,6 +846,7 @@ function renderSyncUI(){
   const pill = $('syncPill'), txt = $('syncText');
   pill.className = 'pill';
   let banner = false, bannerText = '', bannerBtn = 'Ulash';
+  bannerAction = syncTap;
   if(!sync.connected){
     txt.textContent = 'Ulanmagan';
     banner = true;
@@ -751,6 +861,13 @@ function renderSyncUI(){
   } else {
     pill.classList.add('ok'); txt.textContent = 'Drive ✓';
   }
+  if(!banner && sync.connected && !sync.cal && hasTimed()){
+    banner = true; bannerBtn = 'Ruxsat berish'; bannerAction = () => requestToken(true);
+    bannerText = 'Telefoningizga eslatma kelishi uchun Google Calendar\'ga ruxsat bering.';
+  } else if(!banner && sync.connected && sync.cal && calError){
+    banner = true; bannerBtn = 'Qayta urinish'; bannerAction = syncTap;
+    bannerText = '🔔 ' + calError + '.';
+  }
   $('connectBanner').hidden = !banner;
   $('bannerText').textContent = bannerText;
   $('bannerBtn').textContent = bannerBtn;
@@ -760,7 +877,14 @@ function renderSyncUI(){
   $('gConnect').hidden = sync.connected;
   $('gSyncNow').hidden = !sync.connected;
   $('gDisconnect').hidden = !sync.connected;
+
+  $('calStatus').textContent = !sync.connected ? 'Avval Google hisobingizni ulang.'
+    : !sync.cal ? 'O\'chiq. Vaqt belgilangan vazifalar uchun eslatma kelmaydi.'
+    : calError ? 'Xato: ' + calError + '.'
+    : 'Yoqilgan ✓ Vaqt belgilangan har bir vazifa Google Calendar\'ga yoziladi va 5 daqiqa oldin telefoningizga eslatma keladi.';
+  $('calEnable').hidden = !sync.connected || sync.cal;
 }
+let bannerAction = null;
 
 function syncTap(){
   if(!sync.connected) requestToken(true);
@@ -768,13 +892,14 @@ function syncTap(){
   else doSync();
 }
 $('syncPill').onclick = syncTap;
-$('bannerBtn').onclick = syncTap;
+$('bannerBtn').onclick = () => (bannerAction || syncTap)();
+$('calEnable').onclick = () => requestToken(true);
 $('gSyncNow').onclick = syncTap;
 $('gConnect').onclick = () => requestToken(true);
 $('gDisconnect').onclick = () => {
   if(!confirm('Google Drive uzilsinmi? Vazifalar shu qurilmada qoladi.')) return;
   try{ if(sync.token && window.google) google.accounts.oauth2.revoke(sync.token, () => {}); }catch(e){}
-  Object.assign(sync, { token:'', exp:0, connected:false, fileId:'', lastSync:0 }); saveSync(); renderSyncUI();
+  Object.assign(sync, { token:'', exp:0, connected:false, cal:false, fileId:'', lastSync:0 }); saveSync(); renderSyncUI();
 };
 
 document.addEventListener('visibilitychange', () => {
