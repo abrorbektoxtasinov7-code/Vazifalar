@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vazifalar</title>
+<meta name="description" content="Vazifalar ro'yxati — Google Drive bilan sinxronlanadi">
+<meta name="theme-color" content="#121417">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+:root{
+  --bg:#121417; --surface:#1b1e22; --surface2:#23272c; --line:#2e3339;
+  --text:#eef1f4; --muted:#9aa3ad; --accent:#7fd4a7; --accent-ink:#0f2a1c;
+  --red:#ef7d7d; --amber:#f0c36b; --blue:#8fb8f0;
+  --radius:14px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{min-height:100vh;padding-bottom:calc(90px + env(safe-area-inset-bottom))}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+.wrap{max-width:680px;margin:0 auto;padding:0 16px}
+
+/* header */
+header{position:sticky;top:0;z-index:10;background:rgba(18,20,23,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);padding-top:env(safe-area-inset-top)}
+.bar{display:flex;align-items:center;gap:10px;height:58px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:19px;flex:1;min-width:0}
+.logo img{width:30px;height:30px;border-radius:8px}
+.pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:7px 12px;font-size:13px;color:var(--muted);white-space:nowrap}
+.pill .dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.pill.ok .dot{background:var(--accent)} .pill.busy .dot{background:var(--amber);animation:pulse 1s infinite}
+.pill.warn .dot{background:var(--red)}
+@keyframes pulse{50%{opacity:.3}}
+.iconbtn{width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;padding:0}
+.iconbtn svg{width:20px;height:20px}
+
+/* tabs */
+.tabs{display:flex;gap:6px;overflow-x:auto;padding:12px 0 4px;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:999px;padding:7px 14px;font-size:14px;white-space:nowrap}
+.tab.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.tab .n{opacity:.7;margin-left:4px;font-size:12px}
+.lists .tab{padding:5px 12px;font-size:13px}
+.lists .tab.on{background:var(--surface2);color:var(--text);border-color:var(--accent)}
+
+/* banner */
+.banner{margin:12px 0 0;padding:12px 14px;border-radius:var(--radius);background:#1f2a24;border:1px solid #2f4a3a;display:flex;gap:12px;align-items:center;font-size:14px}
+.banner p{margin:0;flex:1}
+.btn{border:0;border-radius:10px;padding:10px 16px;background:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn.ghost{background:var(--surface2);color:var(--text);border:1px solid var(--line)}
+.btn.danger{background:transparent;color:var(--red);border:1px solid #5a3333}
+.btn.sm{padding:7px 12px;font-size:14px}
+
+/* list */
+h2.sec{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:20px 2px 8px;font-weight:600}
+.task{display:flex;gap:12px;align-items:flex-start;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px}
+.check{flex:none;width:24px;height:24px;border-radius:50%;border:2px solid var(--muted);background:transparent;display:grid;place-items:center;margin-top:1px;padding:0}
+.check.p3{border-color:var(--red)} .check.p2{border-color:var(--amber)}
+.task.done .check{background:var(--accent);border-color:var(--accent)}
+.check svg{width:14px;height:14px;opacity:0}
+.task.done .check svg{opacity:1}
+.body{flex:1;min-width:0}
+.title{word-wrap:break-word}
+.task.done .title{text-decoration:line-through;color:var(--muted)}
+.meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:4px;font-size:13px;color:var(--muted)}
+.meta .late{color:var(--red)} .meta .today{color:var(--accent)}
+.note{font-size:13px;color:var(--muted);margin-top:3px;white-space:pre-wrap;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.empty{text-align:center;color:var(--muted);padding:48px 16px}
+.empty b{display:block;color:var(--text);font-size:17px;margin-bottom:4px}
+
+/* add bar */
+.addbar{position:fixed;left:0;right:0;bottom:0;background:rgba(18,20,23,.96);border-top:1px solid var(--line);padding:10px 0 calc(10px + env(safe-area-inset-bottom));z-index:10}
+.addbar form{display:flex;gap:8px}
+.addbar input{flex:1;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;outline:none}
+.addbar input:focus{border-color:var(--accent)}
+.addbar .btn{padding:0 18px;font-size:22px;line-height:1}
+
+/* sheet */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:20;display:none;align-items:flex-end;justify-content:center}
+.scrim.open{display:flex}
+.sheet{background:var(--surface);width:100%;max-width:680px;border-radius:20px 20px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));max-height:92vh;overflow:auto;border:1px solid var(--line)}
+@media(min-width:700px){.scrim{align-items:center}.sheet{border-radius:20px}}
+.sheet h3{margin:0 0 14px;font-size:18px}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:13px;color:var(--muted);margin-bottom:5px}
+.field input,.field textarea,.field select{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:11px 12px;outline:none}
+.field input:focus,.field textarea:focus,.field select:focus{border-color:var(--accent)}
+.field textarea{min-height:70px;resize:vertical}
+.row{display:flex;gap:10px}.row>*{flex:1;min-width:0}
+.seg{display:flex;gap:6px}
+.seg button{flex:1;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:9px 4px;font-size:14px;color:var(--muted)}
+.seg button.on{border-color:var(--accent);color:var(--text);background:var(--surface2)}
+.quick{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.quick button{border:1px solid var(--line);background:var(--bg);border-radius:999px;padding:4px 10px;font-size:13px;color:var(--muted)}
+.actions{display:flex;gap:8px;margin-top:16px}
+.actions .grow{flex:1}
+.card{background:var(--bg);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:14px}
+.card h4{margin:0 0 6px;font-size:15px}
+.card p{margin:0 0 10px;font-size:14px;color:var(--muted)}
+.chiprow{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--line);border-radius:999px;padding:5px 6px 5px 12px;font-size:14px}
+.chip button{border:0;background:transparent;color:var(--muted);width:22px;height:22px;border-radius:50%;padding:0}
+.small{font-size:12px;color:var(--muted)}
+code{background:var(--surface2);padding:1px 5px;border-radius:5px;font-size:12px;word-break:break-all}
+
+.toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);background:#2b3036;color:var(--text);padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;transition:.25s;z-index:30;pointer-events:none;max-width:90vw;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap bar">
+    <div class="logo"><img src="icon-192.png" alt=""><span>Vazifalar</span></div>
+    <button class="pill" id="syncPill" title="Sinxronlash"><span class="dot"></span><span id="syncText">Faqat telefonda</span></button>
+    <button class="iconbtn" id="installBtn" hidden title="O'rnatish" aria-label="O'rnatish">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 19h14"/></svg>
+    </button>
+    <button class="iconbtn" id="settingsBtn" title="Sozlamalar" aria-label="Sozlamalar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="banner" id="connectBanner" hidden>
+    <p id="bannerText">Vazifalaringizni Google Drive'ga saqlash uchun hisobingizni ulang.</p>
+    <button class="btn sm" id="bannerBtn">Ulash</button>
+  </div>
+  <nav class="tabs" id="viewTabs"></nav>
+  <nav class="tabs lists" id="listTabs"></nav>
+  <div id="taskArea"></div>
+</main>
+
+<div class="addbar">
+  <form class="wrap" id="addForm" autocomplete="off">
+    <input id="addInput" placeholder="Yangi vazifa yozing…" maxlength="300" enterkeyhint="done">
+    <button class="btn" type="submit" aria-label="Qo'shish">+</button>
+  </form>
+</div>
+
+<!-- Edit sheet -->
+<div class="scrim" id="editScrim">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="editTitle">
+    <h3 id="editTitle">Vazifa</h3>
+    <div class="field"><label for="fTitle">Nomi</label><input id="fTitle" maxlength="300"></div>
+    <div class="field"><label for="fNote">Izoh</label><textarea id="fNote" maxlength="3000"></textarea></div>
+    <div class="row">
+      <div class="field"><label for="fDue">Muddat</label><input type="date" id="fDue"></div>
+      <div class="field"><label for="fList">Ro'yxat</label><select id="fList"></select></div>
+    </div>
+    <div class="quick" id="dueQuick">
+      <button data-d="0">Bugun</button><button data-d="1">Ertaga</button><button data-d="7">1 haftadan keyin</button><button data-d="">Muddatsiz</button>
+    </div>
+    <div class="field" style="margin-top:12px"><label>Muhimlik</label>
+      <div class="seg" id="fPrio"><button data-p="1">Oddiy</button><button data-p="2">O'rta</button><button data-p="3">Muhim</button></div>
+    </div>
+    <div class="actions">
+      <button class="btn danger" id="delBtn">O'chirish</button>
+      <span class="grow"></span>
+      <button class="btn ghost" id="cancelBtn">Bekor</button>
+      <button class="btn" id="saveBtn">Saqlash</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings sheet -->
+<div class="scrim" id="setScrim">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="setTitle">
+    <h3 id="setTitle">Sozlamalar</h3>
+
+    <div class="card">
+      <h4>Google Drive sinxronizatsiyasi</h4>
+      <p id="gStatus">Ulanmagan.</p>
+      <div class="field" id="cidField">
+        <label for="cidInput">Client ID</label>
+        <input id="cidInput" placeholder="1234…apps.googleusercontent.com" spellcheck="false" autocapitalize="off">
+        <div class="small" style="margin-top:4px">Google Cloud Console'dan olingan Client ID. Bir marta kiritiladi.</div>
+      </div>
+      <div class="actions" style="margin-top:6px">
+        <button class="btn" id="gConnect">Google bilan ulash</button>
+        <button class="btn ghost" id="gSyncNow" hidden>Hozir sinxronlash</button>
+        <button class="btn danger" id="gDisconnect" hidden>Uzish</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h4>Ro'yxatlar</h4>
+      <div class="chiprow" id="listChips"></div>
+      <form class="row" id="listForm" autocomplete="off">
+        <input id="listInput" placeholder="Yangi ro'yxat nomi" maxlength="40" style="background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 12px;outline:none">
+        <button class="btn sm" style="flex:none">Qo'shish</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h4>Zaxira nusxa</h4>
+      <p>Barcha vazifalarni fayl sifatida yuklab olish yoki fayldan tiklash.</p>
+      <div class="actions" style="margin-top:0">
+        <button class="btn ghost sm" id="exportBtn">Yuklab olish</button>
+        <button class="btn ghost sm" id="importBtn">Fayldan tiklash</button>
+        <input type="file" id="importFile" accept="application/json,.json" hidden>
+      </div>
+    </div>
+
+    <div class="actions"><span class="grow"></span><button class="btn" id="setClose">Yopish</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+'use strict';
+
+/* ================= Storage & model ================= */
+const KEY = 'vz_data_v1';
+const SKEY = 'vz_sync_v1';
+const now = () => Date.now();
+const uid = () => now().toString(36) + Math.random().toString(36).slice(2, 8);
+const $ = id => document.getElementById(id);
+
+function lsGet(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } }
+function lsSet(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+
+function defaultData(){
+  const t = now();
+  return { tasks: [], lists: [
+    { id:'shaxsiy', name:'Shaxsiy', updatedAt:t },
+    { id:'ish', name:'Ish', updatedAt:t },
+    { id:'xarid', name:'Xaridlar', updatedAt:t }
+  ]};
+}
+let data = lsGet(KEY, null) || defaultData();
+let sync = Object.assign({ clientId:'', fileId:'', token:'', exp:0, lastSync:0, connected:false, dirty:false }, lsGet(SKEY, {}));
+
+function saveLocal(){ lsSet(KEY, data); }
+function saveSync(){ lsSet(SKEY, sync); }
+
+const tasks = () => data.tasks.filter(t => !t.deleted);
+const lists = () => data.lists.filter(l => !l.deleted);
+const listName = id => (data.lists.find(l => l.id === id) || {}).name || '';
+
+function touch(obj){ obj.updatedAt = now(); }
+function changed(){ saveLocal(); render(); sync.dirty = true; saveSync(); scheduleSync(); }
+
+/* ================= Dates ================= */
+const MONTHS = ['yanvar','fevral','mart','aprel','may','iyun','iyul','avgust','sentabr','oktabr','noyabr','dekabr'];
+function ymd(d){ return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+function addDays(n){ const d = new Date(); d.setDate(d.getDate()+n); return ymd(d); }
+const today = () => addDays(0);
+function dueLabel(s){
+  if(!s) return null;
+  const t = today();
+  if(s === t) return { text:'Bugun', cls:'today' };
+  if(s === addDays(1)) return { text:'Ertaga', cls:'' };
+  if(s === addDays(-1)) return { text:'Kecha', cls:'late' };
+  const [y,m,d] = s.split('-').map(Number);
+  const text = d + '-' + MONTHS[m-1] + (y !== new Date().getFullYear() ? ' ' + y : '');
+  return { text, cls: s < t ? 'late' : '' };
+}
+
+/* ================= UI state ================= */
+let view = 'today';   // today | upcoming | all | done
+let listFilter = '';  // '' = all lists
+const VIEWS = [['today','Bugun'],['upcoming','Rejali'],['all','Barchasi'],['done','Bajarilgan']];
+
+function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function inView(t, v){
+  const td = today();
+  if(v === 'done') return t.done;
+  if(t.done) return false;
+  if(v === 'today') return !!t.due && t.due <= td;
+  if(v === 'upcoming') return !!t.due && t.due > td;
+  return true;
+}
+function sortActive(a,b){
+  if((b.prio||1) !== (a.prio||1)) return (b.prio||1) - (a.prio||1);
+  if(a.due !== b.due){ if(!a.due) return 1; if(!b.due) return -1; return a.due < b.due ? -1 : 1; }
+  return a.createdAt - b.createdAt;
+}
+
+const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="#0f2a1c" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+
+function taskHTML(t){
+  const dl = dueLabel(t.due);
+  const meta = [];
+  if(dl) meta.push(`<span class="${dl.cls}">${esc(dl.text)}</span>`);
+  if(!listFilter && t.list && listName(t.list)) meta.push(`<span># ${esc(listName(t.list))}</span>`);
+  if(t.prio === 3) meta.push('<span style="color:var(--red)">Muhim</span>');
+  else if(t.prio === 2) meta.push('<span style="color:var(--amber)">O\'rta</span>');
+  return `<div class="task${t.done?' done':''}" data-id="${esc(t.id)}">
+    <button class="check p${t.prio||1}" data-act="toggle" aria-label="Bajarildi">${CHECK_SVG}</button>
+    <div class="body" data-act="edit">
+      <div class="title">${esc(t.title)}</div>
+      ${t.note ? `<div class="note">${esc(t.note)}</div>` : ''}
+      ${meta.length ? `<div class="meta">${meta.join('')}</div>` : ''}
+    </div></div>`;
+}
+
+function render(){
+  const all = tasks().filter(t => !listFilter || t.list === listFilter);
+  // view tabs
+  $('viewTabs').innerHTML = VIEWS.map(([k,n]) => {
+    const c = all.filter(t => inView(t,k)).length;
+    return `<button class="tab${view===k?' on':''}" data-view="${k}">${n}${c?`<span class="n">${c}</span>`:''}</button>`;
+  }).join('');
+  // list tabs
+  $('listTabs').innerHTML = [`<button class="tab${!listFilter?' on':''}" data-list="">Hamma ro'yxatlar</button>`]
+    .concat(lists().map(l => `<button class="tab${listFilter===l.id?' on':''}" data-list="${esc(l.id)}">${esc(l.name)}</button>`)).join('');
+
+  let items = all.filter(t => inView(t, view));
+  let html = '';
+  if(view === 'done'){
+    items.sort((a,b) => (b.doneAt||0) - (a.doneAt||0));
+    if(items.length) html += `<div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn ghost sm" id="clearDone">Bajarilganlarni tozalash</button></div>`;
+    html += items.map(taskHTML).join('');
+  } else if(view === 'today'){
+    const late = items.filter(t => t.due < today()).sort(sortActive);
+    const tod = items.filter(t => t.due === today()).sort(sortActive);
+    if(late.length) html += `<h2 class="sec" style="color:var(--red)">Muddati o'tgan</h2>` + late.map(taskHTML).join('');
+    if(tod.length) html += `<h2 class="sec">Bugun</h2>` + tod.map(taskHTML).join('');
+  } else if(view === 'upcoming'){
+    items.sort((a,b) => a.due < b.due ? -1 : a.due > b.due ? 1 : sortActive(a,b));
+    let last = '';
+    items.forEach(t => { if(t.due !== last){ last = t.due; html += `<h2 class="sec">${esc(dueLabel(t.due).text)}</h2>`; } html += taskHTML(t); });
+  } else {
+    items.sort(sortActive);
+    html += `<div style="height:8px"></div>` + items.map(taskHTML).join('');
+  }
+  if(!items.length){
+    const msg = {
+      today:['Bugun uchun vazifa yo\'q','Pastdan yangi vazifa qo\'shing.'],
+      upcoming:['Rejalashtirilgan vazifa yo\'q','Vazifaga muddat belgilasangiz, shu yerda chiqadi.'],
+      all:['Hammasi bajarilgan!','Yangi vazifa qo\'shish uchun pastdagi maydonga yozing.'],
+      done:['Hali bajarilgan vazifa yo\'q','Vazifani bajarganda doirachani bosing.']
+    }[view];
+    html = `<div class="empty"><b>${msg[0]}</b>${msg[1]}</div>`;
+  }
+  $('taskArea').innerHTML = html;
+  renderSyncUI();
+}
+
+/* ================= Interactions ================= */
+$('viewTabs').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if(b){ view = b.dataset.view; render(); } });
+$('listTabs').addEventListener('click', e => { const b = e.target.closest('[data-list]'); if(b){ listFilter = b.dataset.list; render(); } });
+
+$('addForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const title = $('addInput').value.trim();
+  if(!title) return;
+  const t = { id: uid(), title, note:'', done:false, prio:1,
+    list: listFilter || (lists()[0] || {}).id || '',
+    due: view === 'today' ? today() : (view === 'upcoming' ? addDays(1) : ''),
+    createdAt: now(), updatedAt: now() };
+  data.tasks.push(t);
+  $('addInput').value = '';
+  if(view === 'done') view = 'all';
+  changed();
+});
+
+$('taskArea').addEventListener('click', e => {
+  if(e.target.id === 'clearDone'){
+    const d = tasks().filter(t => t.done && (!listFilter || t.list === listFilter));
+    if(!d.length || !confirm(d.length + ' ta bajarilgan vazifa o\'chirilsinmi?')) return;
+    d.forEach(t => { t.deleted = true; touch(t); });
+    changed(); return;
+  }
+  const row = e.target.closest('.task'); if(!row) return;
+  const t = data.tasks.find(x => x.id === row.dataset.id); if(!t) return;
+  const act = e.target.closest('[data-act]');
+  if(act && act.dataset.act === 'toggle'){
+    t.done = !t.done; t.doneAt = t.done ? now() : 0; touch(t);
+    if(t.done) toast('Bajarildi ✓');
+    changed();
+  } else openEdit(t);
+});
+
+/* edit sheet */
+let editing = null, editPrio = 1;
+function setPrio(p){ editPrio = p; [...$('fPrio').children].forEach(b => b.classList.toggle('on', +b.dataset.p === p)); }
+function openEdit(t){
+  editing = t;
+  $('fTitle').value = t.title; $('fNote').value = t.note || ''; $('fDue').value = t.due || '';
+  $('fList').innerHTML = '<option value="">— Ro\'yxatsiz —</option>' + lists().map(l => `<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('');
+  $('fList').value = t.list || '';
+  setPrio(t.prio || 1);
+  $('editScrim').classList.add('open');
+}
+function closeEdit(){ $('editScrim').classList.remove('open'); editing = null; }
+$('fPrio').addEventListener('click', e => { const b = e.target.closest('[data-p]'); if(b) setPrio(+b.dataset.p); });
+$('dueQuick').addEventListener('click', e => { const b = e.target.closest('[data-d]'); if(b) $('fDue').value = b.dataset.d === '' ? '' : addDays(+b.dataset.d); });
+$('cancelBtn').onclick = closeEdit;
+$('saveBtn').onclick = () => {
+  if(!editing) return;
+  const title = $('fTitle').value.trim();
+  if(!title){ $('fTitle').focus(); return; }
+  Object.assign(editing, { title, note: $('fNote').value.trim(), due: $('fDue').value, list: $('fList').value, prio: editPrio });
+  touch(editing); closeEdit(); changed();
+};
+$('delBtn').onclick = () => {
+  if(!editing || !confirm('Bu vazifa o\'chirilsinmi?')) return;
+  editing.deleted = true; touch(editing); closeEdit(); changed(); toast('O\'chirildi');
+};
+$('editScrim').addEventListener('click', e => { if(e.target.id === 'editScrim') closeEdit(); });
+
+/* settings sheet */
+function renderLists(){
+  $('listChips').innerHTML = lists().map(l => `<span class="chip">${esc(l.name)}<button data-del="${esc(l.id)}" aria-label="O'chirish">✕</button></span>`).join('') || '<span class="small">Ro\'yxat yo\'q</span>';
+}
+$('settingsBtn').onclick = () => { $('cidInput').value = sync.clientId; renderLists(); renderSyncUI(); $('setScrim').classList.add('open'); };
+$('setClose').onclick = () => $('setScrim').classList.remove('open');
+$('setScrim').addEventListener('click', e => { if(e.target.id === 'setScrim') $('setScrim').classList.remove('open'); });
+$('listForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const name = $('listInput').value.trim(); if(!name) return;
+  data.lists.push({ id: uid(), name, updatedAt: now() });
+  $('listInput').value = ''; renderLists(); changed();
+});
+$('listChips').addEventListener('click', e => {
+  const b = e.target.closest('[data-del]'); if(!b) return;
+  const l = data.lists.find(x => x.id === b.dataset.del); if(!l) return;
+  const n = tasks().filter(t => t.list === l.id).length;
+  if(!confirm(`"${l.name}" ro'yxati o'chirilsinmi?` + (n ? ` Undagi ${n} ta vazifa ro'yxatsiz qoladi.` : ''))) return;
+  l.deleted = true; touch(l);
+  tasks().forEach(t => { if(t.list === l.id){ t.list = ''; touch(t); } });
+  if(listFilter === l.id) listFilter = '';
+  renderLists(); changed();
+});
+
+$('exportBtn').onclick = () => {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type:'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'vazifalar-' + today() + '.json'; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+};
+$('importBtn').onclick = () => $('importFile').click();
+$('importFile').onchange = async e => {
+  const f = e.target.files[0]; if(!f) return;
+  try{
+    const inc = JSON.parse(await f.text());
+    if(!inc || !Array.isArray(inc.tasks)) throw 0;
+    data = merge(data, inc); changed(); toast('Tiklandi');
+  }catch(err){ toast('Fayl noto\'g\'ri'); }
+  e.target.value = '';
+};
+
+/* toast */
+let toastTimer;
+function toast(msg){ const el = $('toast'); el.textContent = msg; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2200); }
+
+/* ================= Merge ================= */
+function mergeArr(a = [], b = []){
+  const m = new Map();
+  for(const x of a) if(x && x.id) m.set(x.id, x);
+  for(const y of b){
+    if(!y || !y.id) continue;
+    const x = m.get(y.id);
+    if(!x || (y.updatedAt||0) > (x.updatedAt||0)) m.set(y.id, y);
+  }
+  return [...m.values()];
+}
+function merge(a, b){
+  const out = { tasks: mergeArr(a.tasks, b.tasks), lists: mergeArr(a.lists, b.lists) };
+  // drop tombstones older than 60 days
+  const cut = now() - 60*864e5;
+  out.tasks = out.tasks.filter(t => !(t.deleted && t.updatedAt < cut));
+  out.lists = out.lists.filter(l => !(l.deleted && l.updatedAt < cut));
+  return out;
+}
+window.__vzMerge = merge; // for testing
+
+/* ================= Google Drive sync ================= */
+const SCOPE = 'https://www.googleapis.com/auth/drive.file';
+const FILE_NAME = 'Vazifalar (sinxron).json';
+let tokenClient = null, gisLoading = null, syncing = false, syncAgain = false, syncTimer = null, syncError = '';
+
+const tokenValid = () => sync.token && sync.exp > now() + 60000;
+
+function loadGis(){
+  if(window.google && google.accounts && google.accounts.oauth2) return Promise.resolve();
+  if(gisLoading) return gisLoading;
+  gisLoading = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client'; s.async = true;
+    s.onload = res; s.onerror = () => { gisLoading = null; rej(new Error('Internet yo\'q')); };
+    document.head.appendChild(s);
+  });
+  return gisLoading;
+}
+
+async function requestToken(firstTime){
+  if(!sync.clientId){ openSettingsForCid(); return; }
+  try{ await loadGis(); }catch(e){ toast('Google bilan bog\'lanib bo\'lmadi. Internetni tekshiring.'); return; }
+  if(!tokenClient || tokenClient._cid !== sync.clientId){
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: sync.clientId, scope: SCOPE,
+      callback: resp => {
+        if(resp.error){ syncError = 'Ulanish rad etildi'; renderSyncUI(); return; }
+        sync.token = resp.access_token; sync.exp = now() + (resp.expires_in||3600)*1000;
+        sync.connected = true; syncError = ''; saveSync();
+        toast('Google Drive ulandi'); doSync();
+      },
+      error_callback: err => { syncError = err && err.type === 'popup_closed' ? '' : 'Ulanishda xato'; renderSyncUI(); }
+    });
+    tokenClient._cid = sync.clientId;
+  }
+  tokenClient.requestAccessToken({ prompt: firstTime ? 'consent' : '' });
+}
+
+function openSettingsForCid(){
+  $('settingsBtn').click();
+  setTimeout(() => $('cidInput').focus(), 100);
+  toast('Avval Client ID kiriting');
+}
+
+async function api(url, opts = {}){
+  opts.headers = Object.assign({ Authorization: 'Bearer ' + sync.token }, opts.headers || {});
+  const r = await fetch(url, opts);
+  if(r.status === 401){ sync.token = ''; sync.exp = 0; saveSync(); const e = new Error('auth'); e.auth = true; throw e; }
+  if(!r.ok){ const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; }
+  return r;
+}
+
+async function findFile(){
+  if(sync.fileId){
+    try{
+      const r = await api(`https://www.googleapis.com/drive/v3/files/${sync.fileId}?fields=id,trashed`);
+      const j = await r.json(); if(!j.trashed) return sync.fileId;
+    }catch(e){ if(e.auth) throw e; }
+  }
+  const q = encodeURIComponent(`name='${FILE_NAME}' and trashed=false`);
+  const r = await api(`https://www.googleapis.com/drive/v3/files?q=${q}&spaces=drive&orderBy=modifiedTime desc&fields=files(id)`);
+  const j = await r.json();
+  sync.fileId = (j.files && j.files[0] && j.files[0].id) || '';
+  saveSync();
+  return sync.fileId;
+}
+
+async function doSync(){
+  if(!sync.connected || !tokenValid()){ renderSyncUI(); return; }
+  if(syncing){ syncAgain = true; return; }
+  syncing = true; syncError = ''; renderSyncUI();
+  try{
+    const id = await findFile();
+    let remote = null;
+    if(id){
+      const r = await api(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`);
+      try{ remote = JSON.parse(await r.text()); }catch(e){ remote = null; }
+    }
+    const before = JSON.stringify(data);
+    if(remote && Array.isArray(remote.tasks)) data = merge(data, remote);
+    const body = JSON.stringify({ app:'Vazifalar', version:1, savedAt:new Date().toISOString(), tasks:data.tasks, lists:data.lists });
+    const remoteSame = remote && JSON.stringify(merge(remote, {tasks:[],lists:[]})) === JSON.stringify(merge(data, {tasks:[],lists:[]}));
+    if(!id){
+      const boundary = 'vz' + uid();
+      const multipart = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
+        JSON.stringify({ name: FILE_NAME, mimeType:'application/json' }) +
+        `\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${boundary}--`;
+      const r = await api('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+        method:'POST', headers:{ 'Content-Type': 'multipart/related; boundary=' + boundary }, body: multipart });
+      sync.fileId = (await r.json()).id;
+    } else if(!remoteSame){
+      await api(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media`, {
+        method:'PATCH', headers:{ 'Content-Type':'application/json' }, body });
+    }
+    sync.lastSync = now(); sync.dirty = false; saveSync();
+    if(JSON.stringify(data) !== before){ saveLocal(); render(); }
+  }catch(e){
+    syncError = e.auth ? '' : (navigator.onLine ? 'Sinxronlashda xato' : 'Internet yo\'q');
+    console.warn('sync', e);
+  }finally{
+    syncing = false; renderSyncUI();
+    if(syncAgain){ syncAgain = false; doSync(); }
+  }
+}
+
+function scheduleSync(){
+  clearTimeout(syncTimer);
+  if(sync.connected && tokenValid()) syncTimer = setTimeout(doSync, 1200);
+  else renderSyncUI();
+}
+
+function timeAgo(t){
+  if(!t) return '';
+  const s = Math.round((now()-t)/1000);
+  if(s < 60) return 'hozirgina';
+  if(s < 3600) return Math.round(s/60) + ' daqiqa oldin';
+  if(s < 86400) return Math.round(s/3600) + ' soat oldin';
+  return new Date(t).toLocaleDateString();
+}
+
+function renderSyncUI(){
+  const pill = $('syncPill'), txt = $('syncText');
+  pill.className = 'pill';
+  let banner = false, bannerText = '', bannerBtn = 'Ulash';
+  if(!sync.connected){
+    txt.textContent = 'Faqat telefonda';
+    banner = !lsGet('vz_banner_hidden', false);
+    bannerText = 'Vazifalaringizni Google Drive\'ga saqlash va boshqa qurilmalarda ko\'rish uchun hisobingizni ulang.';
+  } else if(syncing){
+    pill.classList.add('busy'); txt.textContent = 'Sinxronlanmoqda…';
+  } else if(!tokenValid()){
+    pill.classList.add('warn'); txt.textContent = sync.dirty ? 'Saqlanmagan' : 'Qayta ulash';
+    banner = true; bannerBtn = 'Sinxronlash';
+    bannerText = sync.dirty ? 'O\'zgarishlar hali Google Drive\'ga yuborilmadi. Sinxronlash uchun bosing.' : 'Google Drive bilan yangilash uchun bosing.';
+  } else if(syncError){
+    pill.classList.add('warn'); txt.textContent = syncError;
+  } else {
+    pill.classList.add('ok'); txt.textContent = 'Drive ✓';
+  }
+  $('connectBanner').hidden = !banner;
+  $('bannerText').textContent = bannerText;
+  $('bannerBtn').textContent = bannerBtn;
+
+  // settings card
+  $('gStatus').textContent = !sync.connected ? 'Ulanmagan. Vazifalar faqat shu qurilmada saqlanmoqda.'
+    : 'Ulangan. Drive\'dagi fayl: "' + FILE_NAME + '". ' + (sync.lastSync ? 'Oxirgi sinxronlash: ' + timeAgo(sync.lastSync) + '.' : '');
+  $('gConnect').hidden = sync.connected;
+  $('gSyncNow').hidden = !sync.connected;
+  $('gDisconnect').hidden = !sync.connected;
+}
+
+function syncTap(){
+  if(!sync.clientId){ openSettingsForCid(); return; }
+  if(!sync.connected) requestToken(true);
+  else if(!tokenValid()) requestToken(false);
+  else doSync();
+}
+$('syncPill').onclick = syncTap;
+$('bannerBtn').onclick = syncTap;
+$('gSyncNow').onclick = syncTap;
+$('gConnect').onclick = () => {
+  const v = $('cidInput').value.trim();
+  if(!/\.apps\.googleusercontent\.com$/.test(v)){ toast('Client ID ".apps.googleusercontent.com" bilan tugashi kerak'); $('cidInput').focus(); return; }
+  sync.clientId = v; saveSync();
+  requestToken(true);
+};
+$('gDisconnect').onclick = () => {
+  if(!confirm('Google Drive uzilsinmi? Vazifalar telefonda qoladi.')) return;
+  try{ if(sync.token && window.google) google.accounts.oauth2.revoke(sync.token, () => {}); }catch(e){}
+  Object.assign(sync, { token:'', exp:0, connected:false, fileId:'', lastSync:0 }); saveSync(); renderSyncUI();
+};
+
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible'){ render(); if(tokenValid()) doSync(); } });
+window.addEventListener('online', () => { if(tokenValid()) doSync(); });
+
+/* ================= Install / SW ================= */
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; $('installBtn').hidden = false; });
+$('installBtn').onclick = async () => {
+  if(!deferredPrompt) return;
+  deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; $('installBtn').hidden = true;
+};
+window.addEventListener('appinstalled', () => { $('installBtn').hidden = true; toast('Ilova o\'rnatildi'); });
+if('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+
+/* ================= Start ================= */
+render();
+if(sync.connected){
+  if(sync.clientId) loadGis().catch(() => {});
+  if(tokenValid()) doSync();
+}
+})();
+</script>
+</body>
+</html>
