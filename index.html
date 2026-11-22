@@ -284,7 +284,6 @@ if(sync.clientId !== BUILTIN_CID){ Object.assign(sync, { clientId: BUILTIN_CID, 
 function saveLocal(){ lsSet(KEY, data); }
 function saveSync(){ lsSet(SKEY, sync); }
 if(migrate()){ saveLocal(); sync.dirty = true; saveSync(); }
-
 const tasks = () => data.tasks.filter(t => !t.deleted);
 function touch(obj){ obj.updatedAt = now(); }
 function changed(){ saveLocal(); render(); sync.dirty = true; saveSync(); scheduleSync(); }
@@ -344,21 +343,31 @@ function repText(t){
 }
 
 /* ================= UI state ================= */
-let view = 'all';     // all | today | upcoming | repeat | done
-let listFilter = '';
-const VIEWS = [['all','Barchasi'],['today','Bugun'],['upcoming','Rejali'],['repeat','Takroriy'],['done','Bajarilgan']];
+let view = 'today';   // today | upcoming | repeat | done
+let listFilter = '';  // '' = both lists; tap a list chip again to clear
+const VIEWS = [['today','Bugun'],['upcoming','Rejali'],['repeat','Takroriy'],['done','Bajarilgan']];
+const KEEP_DONE_DAYS = 30;
+
+/* which section a task belongs to */
+function sectionOf(t){
+  if(t.done) return 'done';
+  if(t.rep) return 'repeat';
+  if(t.due && t.due <= today()) return 'today';
+  return 'upcoming';
+}
+/* completed tasks are kept for 30 days, then removed automatically */
+function purgeDone(){
+  const cut = now() - KEEP_DONE_DAYS*864e5;
+  let ch = false;
+  for(const t of data.tasks){
+    if(!t.deleted && t.done && (t.doneAt || t.updatedAt || 0) < cut){ t.deleted = true; t.updatedAt = now(); ch = true; }
+  }
+  return ch;
+}
 
 function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-function inView(t, v){
-  const td = today();
-  if(v === 'done') return t.done;
-  if(t.done) return false;
-  if(v === 'repeat') return !!t.rep;
-  if(v === 'today') return !!t.due && t.due <= td;
-  if(v === 'upcoming') return !!t.due && t.due > td;
-  return true;
-}
+function inView(t, v){ return sectionOf(t) === v; }
 function sortActive(a,b){
   if(a.due !== b.due){ if(!a.due) return 1; if(!b.due) return -1; return a.due < b.due ? -1 : 1; }
   if((b.prio||1) !== (a.prio||1)) return (b.prio||1) - (a.prio||1);
@@ -391,7 +400,7 @@ function render(){
 
   const all = tasks().filter(t => !listFilter || t.list === listFilter);
   const td = today();
-  const active = all.filter(t => !t.done);
+  const active = all.filter(t => !t.done && !t.rep);
   const nLate = active.filter(t => t.due && t.due < td).length;
   const nToday = active.filter(t => t.due === td).length;
   const nDone = all.filter(t => t.done).length;
@@ -404,15 +413,24 @@ function render(){
     const c = all.filter(t => inView(t,k)).length;
     return `<button class="tab${view===k?' on':''}" data-view="${k}">${n}${c?`<span class="n">${c}</span>`:''}</button>`;
   }).join('');
-  $('listTabs').innerHTML = [`<button class="tab${!listFilter?' on':''}" data-list="">Hammasi</button>`]
-    .concat(LISTS.map(l => `<button class="tab${listFilter===l.id?' on':''}" data-list="${l.id}">${l.name}</button>`)).join('');
+  $('listTabs').innerHTML = LISTS.map(l => `<button class="tab${listFilter===l.id?' on':''}" data-list="${l.id}">${l.name}</button>`).join('');
 
   const items = all.filter(t => inView(t, view));
   let html = '';
   if(view === 'done'){
     items.sort((a,b) => (b.doneAt||0) - (a.doneAt||0));
-    if(items.length) html += `<div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn ghost sm" id="clearDone">Bajarilganlarni tozalash</button></div><div style="height:8px"></div>`;
-    html += items.map(taskHTML).join('');
+    if(items.length) html += `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px"><span class="small" style="color:var(--muted);font-size:12.5px">Bajarilgan vazifalar ${KEEP_DONE_DAYS} kun saqlanadi</span><button class="btn ghost sm" id="clearDone">Tozalash</button></div>`;
+    let last = '';
+    items.forEach(t => {
+      const d = ymd(new Date(t.doneAt || t.updatedAt || now()));
+      if(d !== last){ last = d; html += `<h2 class="sec">${esc(dueLabel(d).text)}</h2>`; }
+      html += taskHTML(t);
+    });
+  } else if(view === 'upcoming'){
+    const dated = items.filter(t => t.due).sort(sortActive);
+    const nodue = items.filter(t => !t.due).sort(sortActive);
+    if(dated.length) html += `<h2 class="sec">Kelgusi</h2>` + dated.map(taskHTML).join('');
+    if(nodue.length) html += `<h2 class="sec">Muddatsiz</h2>` + nodue.map(taskHTML).join('');
   } else if(view === 'today'){
     const late = items.filter(t => t.due < td).sort(sortActive);
     const tod = items.filter(t => t.due === td).sort(sortActive);
@@ -423,13 +441,12 @@ function render(){
     const late = items.filter(t => t.due && t.due < td);
     const rest = items.filter(t => !(t.due && t.due < td));
     if(late.length) html += `<h2 class="sec late">Muddati o'tgan</h2>` + late.map(taskHTML).join('');
-    if(rest.length) html += `<h2 class="sec">${{upcoming:'Kelgusi', repeat:'Takrorlanadigan vazifalar'}[view] || 'Vazifalar'}</h2>` + rest.map(taskHTML).join('');
+    if(rest.length) html += `<h2 class="sec">Takrorlanadigan vazifalar</h2>` + rest.map(taskHTML).join('');
   }
   if(!items.length){
     const msg = {
-      all:['Vazifalar yo\'q','Yangi vazifa qo\'shish uchun pastdagi + tugmasini bosing.'],
-      today:['Bugun uchun vazifa yo\'q','Muddati bugun bo\'lgan vazifalar shu yerda chiqadi.'],
-      upcoming:['Rejalashtirilgan vazifa yo\'q','Kelgusi kunlarga muddat qo\'ysangiz, shu yerda chiqadi.'],
+      today:['Bugun uchun vazifa yo\'q','Muddatini bugunga qo\'ygan vazifalaringiz shu yerda chiqadi. Qo\'shish uchun + tugmasini bosing.'],
+      upcoming:['Rejalashtirilgan vazifa yo\'q','Muddatini kelgusi kunlarga qo\'ygan vazifalaringiz shu yerda chiqadi.'],
       repeat:['Takrorlanadigan vazifa yo\'q','Vazifa qo\'shayotganda "Takrorlash" dan Har kuni, Har hafta yoki Kunlar ni tanlang.'],
       done:['Hali bajarilgan vazifa yo\'q','Vazifani bajarganda doirachani bosing.']
     }[view];
@@ -441,7 +458,7 @@ function render(){
 
 /* ================= Interactions ================= */
 $('viewTabs').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if(b){ view = b.dataset.view; render(); } });
-$('listTabs').addEventListener('click', e => { const b = e.target.closest('[data-list]'); if(b){ listFilter = b.dataset.list; render(); } });
+$('listTabs').addEventListener('click', e => { const b = e.target.closest('[data-list]'); if(b){ listFilter = listFilter === b.dataset.list ? '' : b.dataset.list; render(); } });
 
 $('taskArea').addEventListener('click', e => {
   if(e.target.id === 'clearDone'){
@@ -538,12 +555,17 @@ $('saveBtn').onclick = () => {
       if(fRep === 'days') vals.due = firstFrom('days', fDays, 0, vals.due);
     }
   }
-  if(editing){ Object.assign(editing, vals); touch(editing); }
+  let saved;
+  if(editing){ Object.assign(editing, vals); touch(editing); saved = editing; }
   else {
-    data.tasks.push(Object.assign({ id: uid(), done:false, createdAt: now(), updatedAt: now() }, vals));
-    if(view === 'done') view = 'all';
-    toast('Vazifa qo\'shildi');
+    saved = Object.assign({ id: uid(), done:false, createdAt: now(), updatedAt: now() }, vals);
+    data.tasks.push(saved);
   }
+  // show the section the task went to
+  const sec = sectionOf(saved);
+  if(sec !== view){ view = sec; toast((editing ? 'Saqlandi' : 'Vazifa qo\'shildi') + ' → ' + Object.fromEntries(VIEWS)[sec]); }
+  else if(!editing) toast('Vazifa qo\'shildi');
+  if(listFilter && saved.list !== listFilter) listFilter = '';
   closeSheet(); changed();
 };
 $('delBtn').onclick = () => {
@@ -669,6 +691,7 @@ async function doSync(){
     }
     const before = JSON.stringify(data);
     if(remote && Array.isArray(remote.tasks)){ data = merge(data, remote); migrate(); }
+    purgeDone();
     const body = JSON.stringify({ app:'Vazifalar', version:2, savedAt:new Date().toISOString(), tasks:data.tasks, lists:data.lists });
     const norm = x => JSON.stringify(merge(x, {tasks:[],lists:[]}));
     const remoteSame = remote && norm(remote) === norm(data);
@@ -754,7 +777,11 @@ $('gDisconnect').onclick = () => {
   Object.assign(sync, { token:'', exp:0, connected:false, fileId:'', lastSync:0 }); saveSync(); renderSyncUI();
 };
 
-document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible'){ render(); if(tokenValid()) doSync(); } });
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState !== 'visible') return;
+  if(purgeDone()){ saveLocal(); sync.dirty = true; saveSync(); }
+  render(); if(tokenValid()) doSync();
+});
 window.addEventListener('online', () => { if(tokenValid()) doSync(); });
 
 /* ================= Install / SW ================= */
@@ -768,6 +795,7 @@ window.addEventListener('appinstalled', () => { $('installBtn').hidden = true; t
 if('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 
 /* ================= Start ================= */
+if(purgeDone()){ saveLocal(); sync.dirty = true; saveSync(); }
 render();
 if(sync.connected){
   loadGis().catch(() => {});
