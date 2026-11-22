@@ -124,6 +124,12 @@ h2.sec.late{color:var(--red)}
 .seg button.on{border-color:var(--accent);color:var(--text);background:var(--accent-soft)}
 .seg.prio button[data-p="3"].on{border-color:var(--red);background:rgba(255,107,122,.1)}
 .seg.prio button[data-p="2"].on{border-color:var(--amber);background:rgba(245,184,74,.1)}
+.seg.rep button{font-size:13.5px;padding:10px 4px}
+.days{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:10px}
+.days button{border:1px solid var(--line);background:var(--bg);border-radius:12px;padding:10px 0;font-size:14px;color:var(--muted);font-weight:600}
+.days button.on{background:var(--navy);border-color:var(--accent);color:#fff}
+.hint{font-size:12.5px;color:var(--muted);margin-top:8px}
+.tag.rep{color:#b9c9f5;border-color:rgba(91,140,255,.35);background:var(--accent-soft)}
 .actions{display:flex;gap:8px;margin-top:20px;align-items:center}
 .actions .grow{flex:1}
 .actions .btn.main{flex:1;padding:14px}
@@ -172,6 +178,18 @@ h2.sec.late{color:var(--red)}
     <h3 id="editTitle">Yangi vazifa</h3>
     <div class="field"><label for="fTitle">Vazifa</label><input type="text" id="fTitle" maxlength="300" placeholder="Nima qilish kerak?" enterkeyhint="done"></div>
     <div class="field"><label for="fDue">Muddat</label><input type="date" id="fDue"></div>
+    <div class="field"><span class="flabel">Takrorlash</span>
+      <div class="seg rep" id="fRep">
+        <button type="button" data-r="">Yo'q</button>
+        <button type="button" data-r="daily">Har kuni</button>
+        <button type="button" data-r="weekly">Har hafta</button>
+        <button type="button" data-r="days">Kunlar</button>
+      </div>
+      <div class="days" id="fDays" hidden>
+        <button type="button" data-w="1">Du</button><button type="button" data-w="2">Se</button><button type="button" data-w="3">Ch</button><button type="button" data-w="4">Pa</button><button type="button" data-w="5">Ju</button><button type="button" data-w="6">Sh</button><button type="button" data-w="0">Ya</button>
+      </div>
+      <div class="hint" id="repHint" hidden></div>
+    </div>
     <div class="field"><span class="flabel">Ro'yxat</span>
       <div class="seg" id="fList">
         <button type="button" data-l="shaxsiy">Shaxsiy</button>
@@ -289,10 +307,46 @@ function dueLabel(s){
   return { text, cls: s < t ? 'late' : '' };
 }
 
+/* ================= Repeating ================= */
+const WD_SHORT = ['Ya','Du','Se','Ch','Pa','Ju','Sh'];
+const WD_ORDER = [1,2,3,4,5,6,0];
+function parseD(s){ const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
+function repMatch(rep, days, wd, d){
+  if(rep === 'daily') return true;
+  if(rep === 'weekly') return d.getDay() === wd;
+  if(rep === 'days') return (days || []).includes(d.getDay());
+  return false;
+}
+/* first matching date on or after s */
+function firstFrom(rep, days, wd, s){
+  const d = parseD(s);
+  for(let i = 0; i < 8 && !repMatch(rep, days, wd, d); i++) d.setDate(d.getDate()+1);
+  return ymd(d);
+}
+/* next occurrence after the current due; if that is already in the past, the first one from today */
+function nextDue(t){
+  const base = t.due || today();
+  const wd = parseD(base).getDay();
+  const d = parseD(base);
+  for(let i = 0; i < 8; i++){ d.setDate(d.getDate()+1); if(repMatch(t.rep, t.repDays, wd, d)) break; }
+  let s = ymd(d);
+  if(s < today()) s = firstFrom(t.rep, t.repDays, wd, today());
+  return s;
+}
+function repText(t){
+  if(t.rep === 'daily') return 'Har kuni';
+  if(t.rep === 'weekly') return 'Har ' + DAYS[parseD(t.due || today()).getDay()].toLowerCase();
+  if(t.rep === 'days'){
+    const ds = WD_ORDER.filter(w => (t.repDays || []).includes(w));
+    return ds.length === 7 ? 'Har kuni' : ds.map(w => WD_SHORT[w]).join(', ');
+  }
+  return '';
+}
+
 /* ================= UI state ================= */
-let view = 'all';     // all | today | upcoming | done
+let view = 'all';     // all | today | upcoming | repeat | done
 let listFilter = '';
-const VIEWS = [['all','Barchasi'],['today','Bugun'],['upcoming','Rejali'],['done','Bajarilgan']];
+const VIEWS = [['all','Barchasi'],['today','Bugun'],['upcoming','Rejali'],['repeat','Takroriy'],['done','Bajarilgan']];
 
 function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
@@ -300,6 +354,7 @@ function inView(t, v){
   const td = today();
   if(v === 'done') return t.done;
   if(t.done) return false;
+  if(v === 'repeat') return !!t.rep;
   if(v === 'today') return !!t.due && t.due <= td;
   if(v === 'upcoming') return !!t.due && t.due > td;
   return true;
@@ -323,7 +378,7 @@ function taskHTML(t){
       <button class="check" data-act="toggle" aria-label="Bajarildi">${CHECK_SVG}</button>
       <div class="tx">
         <div class="title">${esc(t.title)}</div>
-        <div class="tags">${t.list ? `<span class="tag">${esc(listName(t.list))}</span>` : ''}<span class="tag p${p}">${PRIO[p]}</span></div>
+        <div class="tags">${t.rep ? `<span class="tag rep">↻ ${esc(repText(t))}</span>` : ''}${t.list ? `<span class="tag">${esc(listName(t.list))}</span>` : ''}<span class="tag p${p}">${PRIO[p]}</span></div>
       </div>
     </div>
     <div class="dright"><span class="lbl">Muddat</span><span class="val ${dl.cls}">${esc(dl.text)}</span></div>
@@ -368,13 +423,14 @@ function render(){
     const late = items.filter(t => t.due && t.due < td);
     const rest = items.filter(t => !(t.due && t.due < td));
     if(late.length) html += `<h2 class="sec late">Muddati o'tgan</h2>` + late.map(taskHTML).join('');
-    if(rest.length) html += `<h2 class="sec">${view === 'upcoming' ? 'Kelgusi' : 'Vazifalar'}</h2>` + rest.map(taskHTML).join('');
+    if(rest.length) html += `<h2 class="sec">${{upcoming:'Kelgusi', repeat:'Takrorlanadigan vazifalar'}[view] || 'Vazifalar'}</h2>` + rest.map(taskHTML).join('');
   }
   if(!items.length){
     const msg = {
       all:['Vazifalar yo\'q','Yangi vazifa qo\'shish uchun pastdagi + tugmasini bosing.'],
       today:['Bugun uchun vazifa yo\'q','Muddati bugun bo\'lgan vazifalar shu yerda chiqadi.'],
       upcoming:['Rejalashtirilgan vazifa yo\'q','Kelgusi kunlarga muddat qo\'ysangiz, shu yerda chiqadi.'],
+      repeat:['Takrorlanadigan vazifa yo\'q','Vazifa qo\'shayotganda "Takrorlash" dan Har kuni, Har hafta yoki Kunlar ni tanlang.'],
       done:['Hali bajarilgan vazifa yo\'q','Vazifani bajarganda doirachani bosing.']
     }[view];
     html = `<div class="empty"><div class="ic"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg></div><b>${msg[0]}</b>${msg[1]}</div>`;
@@ -397,14 +453,56 @@ $('taskArea').addEventListener('click', e => {
   const row = e.target.closest('.task'); if(!row) return;
   const t = data.tasks.find(x => x.id === row.dataset.id); if(!t) return;
   if(e.target.closest('[data-act="toggle"]')){
-    t.done = !t.done; t.doneAt = t.done ? now() : 0; touch(t);
-    if(t.done) toast('Bajarildi ✓');
+    if(!t.done && t.rep){
+      // keep a record in "Bajarilgan", move the repeating task to its next date
+      data.tasks.push({ id: uid(), title: t.title, list: t.list, prio: t.prio, due: t.due || today(),
+        done: true, doneAt: now(), createdAt: now(), updatedAt: now(), fromRec: t.id });
+      t.due = nextDue(t); touch(t);
+      toast('Bajarildi ✓  Keyingisi: ' + dueLabel(t.due).text);
+    } else if(t.done && t.fromRec){
+      // undo a repeating completion
+      const o = data.tasks.find(x => x.id === t.fromRec && !x.deleted);
+      if(o && (!o.due || o.due > t.due)){ o.due = t.due; touch(o); }
+      t.deleted = true; touch(t);
+      toast('Bekor qilindi');
+    } else {
+      t.done = !t.done; t.doneAt = t.done ? now() : 0; touch(t);
+      if(t.done) toast('Bajarildi ✓');
+    }
     changed();
   } else openSheet(t);
 });
 
 /* task sheet */
-let editing = null, fPrio = 1, fList = 'shaxsiy';
+let editing = null, fPrio = 1, fList = 'shaxsiy', fRep = '', fDays = [];
+function updRepHint(){
+  const h = $('repHint');
+  const due = $('fDue').value || today();
+  let txt = '';
+  if(fRep === 'daily') txt = 'Har kuni takrorlanadi. Bajarganingizda keyingi kunga o\'tadi.';
+  else if(fRep === 'weekly') txt = 'Har hafta ' + DAYS[parseD(due).getDay()].toLowerCase() + ' kuni takrorlanadi (muddatdagi kun bo\'yicha).';
+  else if(fRep === 'days') txt = fDays.length ? 'Har hafta: ' + WD_ORDER.filter(w => fDays.includes(w)).map(w => DAYS[w]).join(', ') + '.' : 'Takrorlanadigan kunlarni tanlang.';
+  h.textContent = txt; h.hidden = !txt;
+}
+function setRep(r){
+  fRep = r;
+  [...$('fRep').children].forEach(b => b.classList.toggle('on', b.dataset.r === r));
+  $('fDays').hidden = r !== 'days';
+  if(r && !$('fDue').value) $('fDue').value = today();
+  updRepHint();
+}
+function setDays(ds){
+  fDays = ds.slice();
+  [...$('fDays').children].forEach(b => b.classList.toggle('on', fDays.includes(+b.dataset.w)));
+  updRepHint();
+}
+$('fRep').addEventListener('click', e => { const b = e.target.closest('[data-r]'); if(b) setRep(b.dataset.r); });
+$('fDays').addEventListener('click', e => {
+  const b = e.target.closest('[data-w]'); if(!b) return;
+  const w = +b.dataset.w;
+  setDays(fDays.includes(w) ? fDays.filter(x => x !== w) : fDays.concat(w));
+});
+$('fDue').addEventListener('change', updRepHint);
 function setPrio(p){ fPrio = p; [...$('fPrio').children].forEach(b => b.classList.toggle('on', +b.dataset.p === p)); }
 function setList(l){ fList = l; [...$('fList').children].forEach(b => b.classList.toggle('on', b.dataset.l === l)); }
 function openSheet(t){
@@ -416,6 +514,9 @@ function openSheet(t){
   $('fDue').value = t ? (t.due || '') : today();
   setList(t ? (t.list || 'shaxsiy') : (listFilter || 'shaxsiy'));
   setPrio(t ? (t.prio || 1) : 1);
+  setDays(t && t.repDays ? t.repDays : []);
+  setRep(t && !t.done ? (t.rep || '') : '');
+  $('fRep').parentElement.hidden = !!(t && t.done);
   $('editScrim').classList.add('open');
   if(!t) setTimeout(() => $('fTitle').focus(), 60);
 }
@@ -429,6 +530,14 @@ $('saveBtn').onclick = () => {
   const title = $('fTitle').value.trim();
   if(!title){ $('fTitle').focus(); toast('Vazifa nomini yozing'); return; }
   const vals = { title, due: $('fDue').value, list: fList, prio: fPrio };
+  if(!(editing && editing.done)){
+    vals.rep = fRep; vals.repDays = fRep === 'days' ? fDays.slice() : [];
+    if(fRep){
+      if(fRep === 'days' && !fDays.length){ toast('Takrorlanadigan kunlarni tanlang'); return; }
+      if(!vals.due) vals.due = today();
+      if(fRep === 'days') vals.due = firstFrom('days', fDays, 0, vals.due);
+    }
+  }
   if(editing){ Object.assign(editing, vals); touch(editing); }
   else {
     data.tasks.push(Object.assign({ id: uid(), done:false, createdAt: now(), updatedAt: now() }, vals));
