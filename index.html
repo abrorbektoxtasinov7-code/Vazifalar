@@ -176,7 +176,7 @@ code{background:var(--surface2);padding:1px 5px;border-radius:5px;font-size:12px
     <div class="card">
       <h4>Google Drive sinxronizatsiyasi</h4>
       <p id="gStatus">Ulanmagan.</p>
-      <div class="field" id="cidField">
+      <div class="field" id="cidField" hidden>
         <label for="cidInput">Client ID</label>
         <input id="cidInput" placeholder="1234…apps.googleusercontent.com" spellcheck="false" autocapitalize="off">
         <div class="small" style="margin-top:4px">Google Cloud Console'dan olingan Client ID. Bir marta kiritiladi.</div>
@@ -236,7 +236,9 @@ function defaultData(){
   ]};
 }
 let data = lsGet(KEY, null) || defaultData();
+const BUILTIN_CID = '97733040035-1m37637vgug47qg1a57e6hou2i4s07pn.apps.googleusercontent.com';
 let sync = Object.assign({ clientId:'', fileId:'', token:'', exp:0, lastSync:0, connected:false, dirty:false }, lsGet(SKEY, {}));
+if(sync.clientId !== BUILTIN_CID){ Object.assign(sync, { clientId: BUILTIN_CID, token:'', exp:0, connected:false }); }
 
 function saveLocal(){ lsSet(KEY, data); }
 function saveSync(){ lsSet(SKEY, sync); }
@@ -636,9 +638,7 @@ $('syncPill').onclick = syncTap;
 $('bannerBtn').onclick = syncTap;
 $('gSyncNow').onclick = syncTap;
 $('gConnect').onclick = () => {
-  const v = $('cidInput').value.trim();
-  if(!/\.apps\.googleusercontent\.com$/.test(v)){ toast('Client ID ".apps.googleusercontent.com" bilan tugashi kerak'); $('cidInput').focus(); return; }
-  sync.clientId = v; saveSync();
+  sync.clientId = BUILTIN_CID; saveSync();
   requestToken(true);
 };
 $('gDisconnect').onclick = () => {
