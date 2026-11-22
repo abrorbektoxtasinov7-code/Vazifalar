@@ -718,7 +718,17 @@ async function syncCalendar(){
       t.updatedAt = now(); changedAny = true;
     }catch(e){
       if(e.auth) throw e;
-      calError = e.status === 403 ? 'Google Calendar API yoqilmagan yoki ruxsat yo\'q' : 'Eslatmani Calendar\'ga yozib bo\'lmadi';
+      const det = String(e.detail || '');
+      if(/accessNotConfigured|SERVICE_DISABLED|has not been used|is disabled/i.test(det)){
+        calError = 'Google Cloud\'da "Google Calendar API" yoqilmagan';
+      } else if(/insufficient|SCOPE_INSUFFICIENT|PERMISSION_DENIED/i.test(det)){
+        calError = 'Calendar\'ga ruxsat berilmagan. "Eslatmalarni yoqish" ni bosib, Calendar katagiga belgi qo\'ying';
+        sync.cal = false; saveSync();
+      } else {
+        calError = 'Eslatmani Calendar\'ga yozib bo\'lmadi (xato ' + (e.status || '?') + ')';
+      }
+      const m = det.match(/"message"\s*:\s*"([^"]{0,160})/);
+      if(m) calError += ' — ' + m[1];
       console.warn('calendar', e);
       break;
     }
@@ -767,7 +777,11 @@ async function api(url, opts = {}){
   opts.headers = Object.assign({ Authorization: 'Bearer ' + sync.token }, opts.headers || {});
   const r = await fetch(url, opts);
   if(r.status === 401){ sync.token = ''; sync.exp = 0; saveSync(); const e = new Error('auth'); e.auth = true; throw e; }
-  if(!r.ok){ const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; }
+  if(!r.ok){
+    const e = new Error('HTTP ' + r.status); e.status = r.status;
+    try{ e.detail = await r.text(); }catch(x){ e.detail = ''; }
+    throw e;
+  }
   return r;
 }
 
